@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard LDR</title>
+</head>
+<body>
+    <h1>📊 Monitoramento LDR</h1>
+    <ul id="data"></ul>
+
+    <script>
+        async function loadData() {
+            const res = await fetch("/api/data");
+            const data = await res.json();
+
+            const list = document.getElementById("data");
+            list.innerHTML = "";
+
+            data.forEach(item => {
+                const li = document.createElement("li");
+                li.textContent = `Valor: ${item.value}`;
+                list.appendChild(li);
+            });
+        }
+
+        setInterval(loadData, 3000);
+        loadData();
+    </script>
+</body>
+</html>

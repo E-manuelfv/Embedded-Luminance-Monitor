@@ -1,212 +1,293 @@
+/*
+ * PROJETO MQTT - ESP32 COM LDR
+ * Características:
+ * - Arquitetura não-bloqueante (sem delay())
+ * - Reconexão automática (WiFi & MQTT)
+ * - LWT (Última Vontade e Testamento) para monitoramento de estado
+ * - Serialização de dados JSON
+ * - Tratamento remoto de comandos JSON
+ * - Leitura de sensor LDR com calibração
+ */
+
 #include <WiFi.h>
-#include <WebServer.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
 
-// --- Configuração de Rede ---
-const char* ssid = "SSID";      
-const char* password = "PASSWORD"; 
+// ==========================================
+// 1. CONFIGURAÇÕES (Edite estas)
+// ==========================================
+const char* ssid = SSID;
+const char* password = PASSWORD;
 
-// Cria o objeto do servidor na porta 80
-WebServer server(80);
+// Configurações do Broker MQTT
+const char* mqtt_server = "broker.emqx.io";  // Broker público
+const int mqtt_port = 1883;
+const char* mqtt_user = "";
+const char* mqtt_pass = "";
 
-// --- Configuração do Sensor LDR ---
-// No ESP32-C3 SuperMini, usamos o GPIO 2 (ADC1_CH2)
-#define AO_PIN 2  
+// ID único do dispositivo
+const char* device_id = "ESP32_LDR_Unit_01";
 
-// Variáveis para armazenar os dados
+// Tópicos
+const char* topic_telemetry = "iot/esp32/ldr";      // Dados do sensor
+const char* topic_command = "esp32/unit01/cmd";     // Comandos recebidos
+const char* topic_status = "esp32/unit01/status";   // LWT
+
+// ==========================================
+// 2. PINOS E VARIÁVEIS GLOBAIS
+// ==========================================
+#define LDR_PIN 0        
+#define LED_PIN 2
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+// Variáveis do LDR
 int luzBruta = 0;
 int luzPorcentagem = 0;
-String statusLuz = "--";
+String statusLuz = "";
 
-// --- DECLARAÇÃO DE FUNÇÕES (A CORREÇÃO ESTÁ AQUI) ---
-// Isso avisa o compilador que essas funções existem lá embaixo
-void handle_OnConnect();
-void handle_NotFound();
+// Timers
+unsigned long ultimaLeituraLDR = 0;
+unsigned long ultimoEnvioMQTT = 0;
+const long intervaloLeitura = 1000;    // Ler LDR a cada 1 segundo
+const long intervaloEnvio = 5000;      // Enviar dados a cada 5 segundos
 
-// --- Template HTML (Armazenado na memória flash para economizar RAM) ---
-const char index_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor LDR ESP32</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { background-color: #eef1f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .sidebar { width: 240px; min-height: 100vh; background: linear-gradient(180deg, #0d2b45, #092035); color: white; position: fixed; }
-        .sidebar h4 { margin-top: 20px; color: #fff; }
-        .sidebar a { color: #cfd8dc; text-decoration: none; display: block; padding: 10px 20px; transition: 0.3s; }
-        .sidebar a:hover { background-color: #12395c; color: white; border-left: 4px solid #0d6efd; }
-        .content { margin-left: 240px; padding: 20px; }
-        .card-metric { border-left: 5px solid #0d6efd; transition: transform 0.2s; }
-        .card-metric:hover { transform: translateY(-5px); }
-        @media (max-width: 768px) {
-            .sidebar { width: 100%; height: auto; position: relative; min-height: auto; }
-            .content { margin-left: 0; }
-        }
-    </style>
-</head>
-<body>
+// Valores de calibração do LDR (ajuste conforme seu sensor)
+int LDR_ESCURO = 4095;     // Valor máximo (totalmente coberto)
+int LDR_CLARO = 0;         // Valor mínimo (luz forte)
+// NOTA: O valor real varia com o circuito. Faça testes!
 
-<div class="d-flex flex-column flex-md-row">
-    <div class="sidebar d-flex flex-column align-items-center text-center p-3">
-        <h4>ESP32 Monitor</h4>
-        <small class="text-white-50">Firmware v1.0</small>
-        <hr class="w-100 border-light">
-        <nav class="w-100 text-start">
-            <a href="/">Dashboard</a>
-            <a href="#">Configurações</a>
-            <a href="#">Sobre</a>
-        </nav>
-    </div>
-
-    <div class="content flex-grow-1">
-        <h3 class="mb-4 text-dark border-bottom pb-2">Dashboard – Sensor de Luminosidade</h3>
-
-        <div class="row mb-4">
-            <div class="col-md-4 mb-3">
-                <div class="card card-metric shadow-sm">
-                    <div class="card-body">
-                        <small class="text-muted">Leitura Bruta (0-4095)</small>
-                        <h2 class="text-primary">{{VALOR_BRUTO}}</h2>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-4 mb-3">
-                <div class="card card-metric shadow-sm" style="border-left-color: #198754;">
-                    <div class="card-body">
-                        <small class="text-muted">Porcentagem de Luz</small>
-                        <h2 class="text-success">{{VALOR_PORCENTO}}%</h2>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-4 mb-3">
-                <div class="card card-metric shadow-sm" style="border-left-color: #ffc107;">
-                    <div class="card-body">
-                        <small class="text-muted">Status Atual</small>
-                        <h2 class="text-warning">{{STATUS_LUZ}}</h2>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-8 mb-3">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header bg-white fw-bold">Nível de Luz (Visual)</div>
-                    <div class="card-body">
-                        <label>Intensidade da Luz:</label>
-                        <div class="progress" style="height: 30px;">
-                            <div class="progress-bar bg-info" role="progressbar" style="width: {{VALOR_PORCENTO}}%;" aria-valuenow="{{VALOR_PORCENTO}}" aria-valuemin="0" aria-valuemax="100">{{VALOR_PORCENTO}}%</div>
-                        </div>
-                        <p class="mt-3 text-muted">Nota: Atualize a página (F5) para ler o novo valor do sensor.</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-4 mb-3">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header bg-white fw-bold">Gráfico de Rosca</div>
-                    <div class="card-body">
-                        <canvas id="donutChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-    const ctx = document.getElementById('donutChart').getContext('2d');
-    const myChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Luz (%)', 'Escuridão (%)'],
-            datasets: [{
-                data: [{{VALOR_PORCENTO}}, 100 - {{VALOR_PORCENTO}}],
-                backgroundColor: ['#0d6efd', '#e9ecef'],
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } }
-        }
-    });
-</script>
-
-</body>
-</html>
-)rawliteral";
-
-void setup() {
-  Serial.begin(115200);
-  delay(1000);
-
-  // Configura a leitura analógica
-  analogSetAttenuation(ADC_11db); // Permite ler até 3.3V
-
-  Serial.println("Conectando ao Wi-Fi: ");
+// ==========================================
+// 3. CONFIGURAÇÃO DO WIFI
+// ==========================================
+void setup_wifi() {
+  delay(10);
+  Serial.println();
+  Serial.print("Conectando ao WiFi: ");
   Serial.println(ssid);
 
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
+    delay(500);
     Serial.print(".");
   }
-  
-  Serial.println("\nWi-Fi Conectado!");
-  Serial.print("Endereço IP: ");  
+
+  Serial.println("");
+  Serial.println("WiFi conectado");
+  Serial.print("Endereço IP: ");
   Serial.println(WiFi.localIP());
-
-  // Agora o compilador já sabe que essas funções existem
-  server.on("/", handle_OnConnect);
-  server.onNotFound(handle_NotFound);
-
-  server.begin();
-  Serial.println("Servidor HTTP iniciado");
 }
 
-void loop() {
-  server.handleClient();
-}
-
-// --- Implementação das Funções ---
-
-void handle_OnConnect() {
-  // 1. LER O SENSOR
-  luzBruta = analogRead(AO_PIN); // Lê de 0 a 4095
+// ==========================================
+// 4. CALIBRAR LDR - Execute esta função uma vez
+// ==========================================
+void calibrarLDR() {
+  Serial.println("\n=== CALIBRAÇÃO DO LDR ===");
+  Serial.println("1. Cubra completamente o LDR e aguarde...");
+  delay(3000);
+  LDR_ESCURO = analogRead(LDR_PIN);
+  Serial.print("Valor no ESCURO: ");
+  Serial.println(LDR_ESCURO);
   
-  // 2. CONVERTER PARA PORCENTAGEM (Invertido: 0=Escuro, 100=Claro)
-  luzPorcentagem = map(luzBruta, 4095, 0, 0, 100); 
-
-  // Corrige limites se passar um pouco (ruído)
-  if (luzPorcentagem < 0) luzPorcentagem = 0;
-  if (luzPorcentagem > 100) luzPorcentagem = 100;
-
-  // 3. DEFINIR STATUS TEXTUAL
-  if (luzPorcentagem < 20) statusLuz = "Muito Escuro";
-  else if (luzPorcentagem < 50) statusLuz = "Penumbra";
-  else if (luzPorcentagem < 80) statusLuz = "Claro";
-  else statusLuz = "Muito Claro";
-
-  // 4. PREPARAR O HTML
-  String html = index_html; // Copia o template original
-
-  // 5. SUBSTITUIR OS PLACEHOLDERS PELOS VALORES REAIS
-  html.replace("{{VALOR_BRUTO}}", String(luzBruta));
-  html.replace("{{VALOR_PORCENTO}}", String(luzPorcentagem));
-  html.replace("{{STATUS_LUZ}}", statusLuz);
-
-  // 6. ENVIAR PARA O NAVEGADOR
-  server.send(200, "text/html", html); 
+  Serial.println("2. Exponha o LDR à luz forte e aguarde...");
+  delay(3000);
+  LDR_CLARO = analogRead(LDR_PIN);
+  Serial.print("Valor no CLARO: ");
+  Serial.println(LDR_CLARO);
+  
+  Serial.println("=== CALIBRAÇÃO CONCLUÍDA ===\n");
 }
 
-void handle_NotFound(){
-  server.send(404, "text/plain", "Pagina nao encontrada");
+// ==========================================
+// 5. LEITURA E PROCESSAMENTO DO LDR
+// ==========================================
+void lerLDR() {
+  luzBruta = analogRead(LDR_PIN);
+  
+  // IMPORTANTE: Restringir valores dentro do range calibrado
+  if (luzBruta < LDR_CLARO) luzBruta = LDR_CLARO;
+  if (luzBruta > LDR_ESCURO) luzBruta = LDR_ESCURO;
+  
+  // Mapear invertido: valor alto = escuro, valor baixo = claro
+  luzPorcentagem = map(luzBruta, LDR_ESCURO, LDR_CLARO, 0, 100);
+  
+  // Garantir limites de 0-100%
+  luzPorcentagem = constrain(luzPorcentagem, 0, 100);
+  
+  // Determinar status
+  if (luzPorcentagem < 20) {
+    statusLuz = "Escuro";
+  } else if (luzPorcentagem < 50) {
+    statusLuz = "Meia-luz";
+  } else if (luzPorcentagem < 80) {
+    statusLuz = "Claro";
+  } else {
+    statusLuz = "Muito Claro";
+  }
+}
+
+// ==========================================
+// 6. CALLBACK (Agora suporta JSON!)
+// ==========================================
+void callback(char* topico, byte* payload, unsigned int length) {
+  Serial.print("Mensagem recebida [");
+  Serial.print(topico);
+  Serial.print("] ");
+  
+  char mensagem[length + 1];
+  for (int i = 0; i < length; i++) {
+    mensagem[i] = (char)payload[i];
+  }
+  mensagem[length] = '\0';
+  Serial.println(mensagem);
+  
+  // Verificar se é JSON
+  JsonDocument doc;
+  DeserializationError erro = deserializeJson(doc, mensagem);
+  
+  if (erro) {
+    // Se não for JSON válido, trata como texto simples
+    Serial.print("Erro ao parsear JSON: ");
+    Serial.println(erro.c_str());
+    
+    // Para compatibilidade com texto simples
+    String msgSimples = String(mensagem);
+    msgSimples.trim();
+    
+    if (String(topico) == topic_command) {
+      if (msgSimples == "ON" || msgSimples == "{\"msg\": \"ON\"}") {
+        digitalWrite(LED_PIN, HIGH);
+        Serial.println("LED LIGADO via texto simples");
+        client.publish(topic_telemetry, "{\"led\": \"LIGADO\"}");
+      } else if (msgSimples == "OFF" || msgSimples == "{\"msg\": \"OFF\"}") {
+        digitalWrite(LED_PIN, LOW);
+        Serial.println("LED DESLIGADO via texto simples");
+        client.publish(topic_telemetry, "{\"led\": \"DESLIGADO\"}");
+      }
+    }
+  } else {
+    // É JSON válido
+    if (String(topico) == topic_command) {
+      String comando = doc["msg"] | "";  // Procura pela chave "msg"
+      
+      if (comando == "ON") {
+        digitalWrite(LED_PIN, HIGH);
+        Serial.println("LED LIGADO via JSON");
+        client.publish(topic_telemetry, "{\"led\": \"LIGADO\"}");
+      } else if (comando == "OFF") {
+        digitalWrite(LED_PIN, LOW);
+        Serial.println("LED DESLIGADO via JSON");
+        client.publish(topic_telemetry, "{\"led\": \"DESLIGADO\"}");
+      } else {
+        Serial.print("Comando não reconhecido: ");
+        Serial.println(comando);
+      }
+    }
+  }
+}
+
+// ==========================================
+// 7. RECONEXÃO
+// ==========================================
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Tentando conexão MQTT...");
+    
+    if (client.connect(device_id, mqtt_user, mqtt_pass, topic_status, 1, true, "offline")) {
+      Serial.println("conectado");
+      
+      // Publicar status online
+      client.publish(topic_status, "online", true);
+      
+      // Inscrever-se
+      client.subscribe(topic_command);
+      Serial.println("Inscrito no tópico: " + String(topic_command));
+      
+      // Publicar mensagem de inicialização
+      client.publish(topic_telemetry, "{\"status\": \"Sistema iniciado\"}");
+    } else {
+      Serial.print("falhou, rc=");
+      Serial.print(client.state());
+      Serial.println(" tentando novamente em 5 segundos");
+      delay(5000);
+    }
+  }
+}
+
+// ==========================================
+// 8. SETUP PRINCIPAL
+// ==========================================
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(LDR_PIN, INPUT);
+  
+  setup_wifi();
+  
+  // Descomente na primeira execução para calibrar:
+  // calibrarLDR();
+  
+  // Valores estimados (ajuste conforme seus testes):
+  LDR_ESCURO = 3500;   // Valor quando totalmente coberto
+  LDR_CLARO = 500;     // Valor com luz ambiente
+  
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(callback);
+  
+  // Piscar LED para indicar inicialização
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(LED_PIN, HIGH);
+    delay(200);
+    digitalWrite(LED_PIN, LOW);
+    delay(200);
+  }
+}
+
+// ==========================================
+// 9. LOOP PRINCIPAL
+// ==========================================
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+
+  unsigned long agora = millis();
+
+  // Leitura do LDR
+  if (agora - ultimaLeituraLDR > intervaloLeitura) {
+    ultimaLeituraLDR = agora;
+    lerLDR();
+    
+    Serial.print("LDR: ");
+    Serial.print(luzBruta);
+    Serial.print(" (");
+    Serial.print(luzPorcentagem);
+    Serial.print("% - ");
+    Serial.print(statusLuz);
+    Serial.println(")");
+  }
+
+  // Envio de telemetria
+  if (agora - ultimoEnvioMQTT > intervaloEnvio) {
+    ultimoEnvioMQTT = agora;
+    
+    JsonDocument doc;
+    doc["device_id"] = device_id;
+    doc["raw"] = luzBruta;
+    doc["percent"] = luzPorcentagem;
+    doc["status"] = statusLuz;
+    doc["wifi_rssi"] = WiFi.RSSI();
+    doc["uptime"] = millis() / 1000;
+
+    char buffer[256];
+    serializeJson(doc, buffer);
+
+    Serial.print("Publicando: ");
+    Serial.println(buffer);
+    client.publish(topic_telemetry, buffer);
+  }
 }

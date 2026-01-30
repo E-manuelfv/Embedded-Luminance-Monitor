@@ -1,9 +1,6 @@
 # Project specific ignores
-dashboard/
-venv/
 __pycache__/
-run.py
-.env*
+firebase/
 
 # Prerequisites
 *.d
