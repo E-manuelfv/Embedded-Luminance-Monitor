@@ -1,12 +1,12 @@
 import os
 import json
+import time
 import paho.mqtt.client as mqtt
 import firebase_admin
 from firebase_admin import credentials, db
 
-
 # ======================
-# Firebase
+# Firebase (Realtime DB)
 # ======================
 if not firebase_admin._apps:
     cred_path = os.getenv(
@@ -20,7 +20,8 @@ if not firebase_admin._apps:
         "databaseURL": "https://monitor-ldr---esp32-default-rtdb.firebaseio.com"
     })
 
-db = firestore.client()
+# Referência base no Realtime Database
+ldr_ref = db.reference("ldr_data")
 
 # ======================
 # MQTT CONFIG
@@ -30,21 +31,22 @@ MQTT_PORT = 1883
 MQTT_TOPIC = "esp32/ldr"
 
 def on_connect(client, userdata, flags, rc):
-    print("Conectado ao MQTT com código:", rc)
+    print("✅ Conectado ao MQTT | Código:", rc)
     client.subscribe(MQTT_TOPIC)
 
 def on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode())
-        print("Mensagem recebida:", payload)
+        print("📩 Mensagem recebida:", payload)
 
-        db.collection("ldr_data").add({
+        ldr_ref.push({
             "value": payload.get("ldr"),
-            "timestamp": firestore.SERVER_TIMESTAMP
+            "device": payload.get("device", "esp32-c3"),
+            "timestamp": int(time.time() * 1000)
         })
 
     except Exception as e:
-        print("Erro ao processar mensagem:", e)
+        print("❌ Erro ao processar mensagem:", e)
 
 def start_worker():
     client = mqtt.Client()
