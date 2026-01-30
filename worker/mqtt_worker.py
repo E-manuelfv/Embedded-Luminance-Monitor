@@ -1,13 +1,25 @@
+import os
 import json
 import paho.mqtt.client as mqtt
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, db
+
 
 # ======================
 # Firebase
 # ======================
-cred = credentials.Certificate("firebase/serviceAccountKey.json")
-firebase_admin.initialize_app(cred)
+if not firebase_admin._apps:
+    cred_path = os.getenv(
+        "FIREBASE_CREDENTIALS",
+        "/etc/secrets/serviceAccountKey.json"
+    )
+
+    cred = credentials.Certificate(cred_path)
+
+    firebase_admin.initialize_app(cred, {
+        "databaseURL": "https://monitor-ldr---esp32-default-rtdb.firebaseio.com"
+    })
+
 db = firestore.client()
 
 # ======================
