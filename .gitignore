@@ -1,6 +1,12 @@
-# Project specific ignores
-__pycache__/
+# Secrets
 firebase/
+etc/
+.env
+*.json
+
+# Python
+__pycache__/
+venv/
 
 # Prerequisites
 *.d
@@ -56,4 +62,4 @@ Mkfile.old
 dkms.conf
 
 # debug information files
-*.dwo
+*.dwovenv/

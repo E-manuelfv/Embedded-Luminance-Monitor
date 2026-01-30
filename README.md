@@ -1,88 +1,88 @@
-# Embedded LDR Monitor – ESP32 (Local Web Server)
+# Monitor de LDR Embarcado – ESP32 (Servidor Web Local)
 
 [English](README.md) | [Português](README.pt.md)
 
-## Overview
-This project is an embedded system based on the ESP32 that reads ambient light levels using an LDR sensor and exposes the data through a local web interface hosted directly on the microcontroller.
+## Visão Geral
+Este projeto é um sistema embarcado baseado no ESP32 que lê os níveis de luz ambiente usando um sensor LDR e expõe os dados através de uma interface web local hospedada diretamente no microcontrolador.
 
-The main goal of the current state is to validate sensor acquisition, Wi-Fi connectivity, and embedded web visualization in a simple, functional, and inspectable way.
+O objetivo principal do estado atual é validar a aquisição do sensor, a conectividade Wi-Fi e a visualização web embarcada de uma maneira simples, funcional e inspecionável.
 
-## Objectives
-- Practice analog sensor acquisition using the ESP32 ADC.
-- Understand ADC scaling and signal normalization.
-- Implement Wi-Fi connectivity on an embedded device.
-- Serve a dynamic HTML dashboard directly from the ESP32.
-- Visualize sensor data using standard web technologies.
+## Objetivos
+- Praticar a aquisição de sensores analógicos usando o ADC do ESP32.
+- Compreender o escalonamento do ADC e a normalização de sinais.
+- Implementar conectividade Wi-Fi em um dispositivo embarcado.
+- Servir um dashboard HTML dinâmico diretamente do ESP32.
+- Visualizar dados do sensor usando tecnologias web padrão.
 
 ## Hardware
 - ESP32 C3 Mini
-- LDR Module (Light Dependent Resistor)
-- Breadboard and jumper wires
+- Módulo LDR (Resistor Dependente de Luz)
+- Protoboard e jumpers
 
-## Software Stack
-- ESP32 Arduino framework
-- WiFi and WebServer libraries
-- HTML, CSS, and JavaScript
-- Bootstrap 5 for layout
-- Chart.js for data visualization
+## Stack de Software
+- Framework Arduino para ESP32
+- Bibliotecas WiFi e WebServer
+- HTML, CSS e JavaScript
+- Bootstrap 5 para layout
+- Chart.js para visualização de dados
 
-## Firmware Architecture
-The firmware is organized around a simple synchronous execution model:
+## Arquitetura do Firmware
+O firmware está organizado em torno de um modelo de execução síncrona simples:
 
-- **Initialization phase**
-  - Serial interface setup
-  - ADC configuration
-  - Wi-Fi connection
-  - HTTP server initialization
+- **Fase de Inicialização**
+  - Configuração da interface serial
+  - Configuração do ADC
+  - Conexão Wi-Fi
+  - Inicialização do servidor HTTP
 
-- **Runtime phase**
-  - HTTP request handling
-  - On-demand sensor acquisition
-  - Dynamic HTML generation with current sensor values
+- **Fase de Execução (Runtime)**
+  - Tratamento de requisições HTTP
+  - Aquisição do sensor sob demanda
+  - Geração dinâmica de HTML com valores atuais do sensor
 
-Sensor readings occur when the root HTTP endpoint (`/`) is accessed by a client.
+As leituras do sensor ocorrem quando o endpoint raiz HTTP (`/`) é acessado por um cliente.
 
-## Sensor Processing
-- Raw ADC values are read in the range `0–4095`.
-- Values are mapped to a percentage scale (`0–100%`).
-- A simple rule-based classification defines light status:
-  - Very Dark
-  - Low Light
-  - Bright
-  - Very Bright
+## Processamento do Sensor
+- Os valores brutos do ADC são lidos na faixa `0–4095`.
+- Os valores são mapeados para uma escala percentual (`0–100%`).
+- Uma classificação simples baseada em regras define o status da luz:
+  - Muito Escuro (Very Dark)
+  - Pouca Luz (Low Light)
+  - Claro (Bright)
+  - Muito Claro (Very Bright)
 
-## Web Interface
-The embedded web interface provides:
-- Raw ADC value display
-- Light level percentage
-- Textual light condition status
-- Visual progress bar
-- Doughnut chart representing light vs darkness
+## Interface Web
+A interface web embarcada fornece:
+- Exibição do valor bruto do ADC
+- Porcentagem do nível de luz
+- Status textual da condição de luz
+- Barra de progresso visual
+- Gráfico de rosca (Doughnut chart) representando luz vs escuridão
 
-The dashboard is responsive and can be accessed from any device connected to the same local network.
+O dashboard é responsivo e pode ser acessado de qualquer dispositivo conectado à mesma rede local.
 
-## Current Features
-- LDR sensor reading via ESP32 ADC
-- Data normalization and classification
-- Wi-Fi connectivity
-- Embedded HTTP server
-- Dynamic HTML page generation
-- Local network dashboard visualization
+## Funcionalidades Atuais
+- Leitura do sensor LDR via ADC do ESP32
+- Normalização e classificação de dados
+- Conectividade Wi-Fi
+- Servidor HTTP embarcado
+- Geração dinâmica de páginas HTML
+- Visualização de dashboard em rede local
 
-## Known Limitations
-- Sensor data is not stored.
-- No timestamping of measurements.
-- Sensor reading and web server logic are coupled.
-- Page refresh required to update values.
-- No external API or cloud integration.
+## Limitações Conhecidas
+- Os dados do sensor não são armazenados.
+- Sem registro de data/hora (timestamp) das medições.
+- A leitura do sensor e a lógica do servidor web estão acopladas.
+- Necessário atualizar a página para ver novos valores.
+- Sem API externa ou integração com a nuvem.
 
-## Project Status
-🟢 Functional prototype – local sensor monitoring via embedded web server.
+## Status do Projeto
+🟢 Protótipo funcional – monitoramento local do sensor via servidor web embarcado.
 
-## Future Modifications
-- Decouple sensor acquisition from HTTP request handling.
-- Implement periodic sensor sampling.
-- Add REST API endpoint for external data consumers.
-- Introduce data buffering and timestamps.
-- Prepare firmware for cloud backend integration.
-- Improve code modularization and separation of concerns.
+## Modificações Futuras
+- Desacoplar a aquisição do sensor do tratamento de requisições HTTP.
+- Implementar amostragem periódica do sensor.
+- Adicionar endpoint de API REST para consumidores de dados externos.
+- Introduzir buffer de dados e timestamps.
+- Preparar o firmware para integração com backend na nuvem.
+- Melhorar a modularização do código e a separação de responsabilidades.
