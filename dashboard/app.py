@@ -5,9 +5,18 @@ from firebase_admin import credentials, firestore
 app = Flask(__name__)
 
 # Firebase (evita inicializar duas vezes)
+
 if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase/serviceAccountKey.json")
-    firebase_admin.initialize_app(cred)
+    cred = credentials.Certificate(
+        os.getenv(
+            "FIREBASE_CREDENTIALS",
+            "/etc/secrets/serviceAccountKey.json"
+        )
+    )
+
+    firebase_admin.initialize_app(cred, {
+        "databaseURL": "https://monitor-ldr---esp32-default-rtdb.firebaseio.com"
+    })
 
 db = firestore.client()
 

@@ -4,10 +4,17 @@ import firebase_admin
 from firebase_admin import credentials, db
 
 # ---------- FIREBASE ----------
-cred = credentials.Certificate("firebase-adminsdk.json")
-firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://monitor-ldr---esp32-default-rtdb.firebaseio.com'
-})
+if not firebase_admin._apps:
+    cred = credentials.Certificate(
+        os.getenv(
+            "FIREBASE_CREDENTIALS",
+            "/etc/secrets/serviceAccountKey.json"
+        )
+    )
+
+    firebase_admin.initialize_app(cred, {
+        "databaseURL": "https://monitor-ldr---esp32-default-rtdb.firebaseio.com"
+    })
 
 def enviar_leitura_ldr(device_id, raw_value, percent_value, status_text):
     ref = db.reference(f'ldr_readings/{device_id}')
