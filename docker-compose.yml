@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+
+  worker:
+    build: ./backend
+    command: python -m app.worker.mqtt_worker
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - mosquitto
+
+  mosquitto:
+    image: eclipse-mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: sensors
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"

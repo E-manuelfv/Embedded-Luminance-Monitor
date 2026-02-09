@@ -1,0 +1,34 @@
+.
+├── backend/
+│   ├── app/
+│   │   ├── main.py            # FastAPI app
+│   │   ├── api/
+│   │   │   └── v1/
+│   │   │       └── sensors.py
+│   │   ├── core/
+│   │   │   ├── config.py
+│   │   │   └── logging.py
+│   │   ├── models/
+│   │   │   ├── device.py
+│   │   │   └── sensor_data.py
+│   │   ├── schemas/
+│   │   │   └── sensor_payload.py
+│   │   ├── db/
+│   │   │   ├── session.py
+│   │   │   └── base.py
+│   │   └── worker/
+│   │       └── mqtt_worker.py
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── dashboard/
+│   ├── templates/
+│   │   └── dashboard.html
+│   └── static/
+│       └── css/
+│
+├── docker-compose.yml
+├── mosquitto/
+│   └── mosquitto.conf
+├── .env.example
+└── README.md
