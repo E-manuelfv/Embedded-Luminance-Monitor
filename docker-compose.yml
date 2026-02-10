@@ -3,21 +3,38 @@ version: "3.9"
 services:
   api:
     build: ./backend
+    container_name: iot_api
     ports:
       - "8000:8000"
     env_file:
       - .env
     depends_on:
-      - db
+      postgres:
+        condition: service_healthy
 
   worker:
     build: ./backend
+    container_name: iot_worker
     command: python -m app.worker.mqtt_worker
     env_file:
       - .env
     depends_on:
-      - db
+      - postgres
       - mosquitto
+
+  postgres:
+    image: postgres:16
+    container_name: iot_postgres
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
+      interval: 10s
+      retries: 5
 
   mosquitto:
     image: eclipse-mosquitto
@@ -26,11 +43,5 @@ services:
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
 
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: sensors
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
+volumes:
+  postgres_data:

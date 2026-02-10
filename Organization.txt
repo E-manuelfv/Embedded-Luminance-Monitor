@@ -1,34 +1,26 @@
-.
+iot-monitor/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py            # FastAPI app
 │   │   ├── api/
-│   │   │   └── v1/
-│   │   │       └── sensors.py
+│   │   │   ├── v1/
+│   │   │   │   ├── endpoints/
+│   │   │   │   │   └── health.py
+│   │   │   │   └── router.py
+│   │   │   └── deps.py
 │   │   ├── core/
 │   │   │   ├── config.py
-│   │   │   └── logging.py
+│   │   │   └── database.py
 │   │   ├── models/
-│   │   │   ├── device.py
 │   │   │   └── sensor_data.py
-│   │   ├── schemas/
-│   │   │   └── sensor_payload.py
-│   │   ├── db/
-│   │   │   ├── session.py
-│   │   │   └── base.py
-│   │   └── worker/
-│   │       └── mqtt_worker.py
+│   │   ├── worker/
+│   │   │   └── mqtt_worker.py
+│   │   └── main.py
 │   ├── Dockerfile
 │   └── requirements.txt
 │
-├── dashboard/
-│   ├── templates/
-│   │   └── dashboard.html
-│   └── static/
-│       └── css/
-│
-├── docker-compose.yml
 ├── mosquitto/
 │   └── mosquitto.conf
-├── .env.example
+│
+├── docker-compose.yml
+├── .env
 └── README.md
